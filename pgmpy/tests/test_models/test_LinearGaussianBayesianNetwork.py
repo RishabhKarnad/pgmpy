@@ -15,6 +15,14 @@ class TestLGBNMethods(unittest.TestCase):
         self.cpd2 = LinearGaussianCPD("x2", [-5, 0.5], 4, ["x1"])
         self.cpd3 = LinearGaussianCPD("x3", [4, -1], 3, ["x2"])
 
+        self.model_zero_centered = LinearGaussianBayesianNetwork(
+            [("x1", "x2"), ("x1", "x3"), ("x2", "x3"), ("x2", "x4"), ("x4", "x5")])
+        self.cpd4 = LinearGaussianCPD("x1", [0], 0.1)
+        self.cpd5 = LinearGaussianCPD("x2", [0, 1], 0.1, ["x1"])
+        self.cpd6 = LinearGaussianCPD("x3", [0, 1, -1], 0.1, ["x1", "x2"])
+        self.cpd7 = LinearGaussianCPD("x4", [0, 2], 0.1, ["x2"])
+        self.cpd8 = LinearGaussianCPD("x5", [0, 3], 0.1, ["x4"])
+
     def test_cpds_simple(self):
         self.assertEqual("x1", self.cpd1.variable)
         self.assertEqual(4, self.cpd1.variance)
@@ -74,6 +82,24 @@ class TestLGBNMethods(unittest.TestCase):
         np_test.assert_array_equal(
             jgd.covariance,
             np.array([[4.0, 2.0, -2.0], [2.0, 5.0, -5.0], [-2.0, -5.0, 8.0]]),
+        )
+
+        self.model_zero_centered.add_cpds(self.cpd4, self.cpd5,
+                                          self.cpd6, self.cpd7, self.cpd8)
+        for cpd in self.model_zero_centered.get_cpds():
+            print(cpd)
+        jgd = self.model_zero_centered.to_joint_gaussian()
+        self.assertEqual(jgd.variables, ["x1", "x2", "x3", "x4", "x5"])
+        np_test.assert_array_equal(
+            jgd.mean, np.array([[0], [0], [0], [0], [0]]))
+        np_test.assert_array_almost_equal(
+            jgd.covariance,
+            np.array([[0.1,  0.1,  0.0,  0.2,  0.6],
+                      [0.1,  0.2, -0.1,  0.4,  1.2],
+                      [0.0, -0.1,  0.2, -0.2, -0.6],
+                      [0.2,  0.4, -0.2,  0.9,  2.7],
+                      [0.6,  1.2, -0.6,  2.7,  8.2]]),
+            decimal=12,
         )
 
     @unittest.skip("TODO")

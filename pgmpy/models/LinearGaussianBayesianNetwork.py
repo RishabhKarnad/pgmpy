@@ -163,10 +163,23 @@ class LinearGaussianBayesianNetwork(BayesianNetwork):
 
         """
         variables = list(nx.topological_sort(self))
-        mean = np.zeros(len(variables))
-        covariance = np.zeros((len(variables), len(variables)))
+        n_vars = len(variables)
+        mean = np.zeros(n_vars)
+        covariance = np.zeros((n_vars, n_vars))
 
-        for node_idx in range(len(variables)):
+        W = np.zeros((n_vars, n_vars))
+        b = np.zeros(n_vars)
+        D = np.eye(n_vars)
+
+        for node_idx, cpd in enumerate(self.get_cpds()):
+            coefficients = cpd.mean.copy()
+            b[node_idx] = coefficients.pop(0)
+            for coeff, parent in zip(coefficients, cpd.evidence):
+                parent_idx = variables.index(parent)
+                W[parent_idx, node_idx] = coeff
+            D[node_idx, node_idx] = cpd.variance
+
+        for node_idx in range(n_vars):
             cpd = self.get_cpds(variables[node_idx])
             coefficients = cpd.mean.copy()
             coefficients.pop(0)
@@ -179,34 +192,11 @@ class LinearGaussianBayesianNetwork(BayesianNetwork):
                 )
                 + cpd.mean[0]
             )
-            covariance[node_idx, node_idx] = (
-                sum(
-                    [
-                        coeff
-                        * coeff
-                        * covariance[variables.index(parent), variables.index(parent)]
-                        for coeff, parent in zip(coefficients, cpd.evidence)
-                    ]
-                )
-                + cpd.variance
-            )
 
-        for node_i_idx in range(len(variables)):
-            for node_j_idx in range(len(variables)):
-                if covariance[node_j_idx, node_i_idx] != 0:
-                    covariance[node_i_idx, node_j_idx] = covariance[
-                        node_j_idx, node_i_idx
-                    ]
-                else:
-                    cpd_j = self.get_cpds(variables[node_j_idx])
-                    coefficients = cpd_j.mean.copy()
-                    coefficients.pop(0)
-                    covariance[node_i_idx, node_j_idx] = sum(
-                        [
-                            coeff * covariance[node_i_idx, variables.index(parent)]
-                            for coeff, parent in zip(coefficients, cpd_j.evidence)
-                        ]
-                    )
+        # Compute influence matrix
+        lambda_ = np.linalg.inv(np.eye(n_vars) - W)
+
+        covariance = lambda_.T@D@lambda_
 
         return GaussianDistribution(variables, mean, covariance)
 
